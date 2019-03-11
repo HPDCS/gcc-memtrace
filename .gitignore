@@ -1,0 +1,4 @@
+*.so
+*.o
+program
+a.out
