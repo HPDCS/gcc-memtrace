@@ -120,7 +120,8 @@ static bool large_stack_frame(void)
  */	
 static unsigned int memtrace_cleanup_execute(void)	
 {	
-	rtx_insn *insn, *next;	
+	rtx_insn *insn, *next;
+	int code;
 
 	printf("CALL RTL\n");
 
@@ -144,27 +145,28 @@ static unsigned int memtrace_cleanup_execute(void)
 	for (insn = get_insns(); insn; insn = next) {	
 		rtx body;	
 
+
+		printf("----------------------------\n");
+
  		next = NEXT_INSN(insn);	
 
-		print_rtl(stdout, next);
-		continue;
-
  		/* Check the expression code of the insn */	
-		if (!CALL_P(insn))	
-			continue;	
+		if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
+			continue;
+
 
  		/*	
 		 * Check the expression code of the insn body, which is an RTL	
 		 * Expression (RTX) describing the side effect performed by	
 		 * that insn.	
 		 */	
-		body = PATTERN(insn);	
+		body = PATTERN(insn);
 
- 		if (GET_CODE(body) == PARALLEL)	
-			body = XVECEXP(body, 0, 0);	
+		printf("%d:   ", GET_CODE(body));	
 
- 		if (GET_CODE(body) != CALL)	
-			continue;	
+		print_rtl_single(stdout, next);
+		continue;
+		
 
  		/*	
 		 * Check the first operand of the call expression. It should	

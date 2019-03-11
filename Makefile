@@ -24,7 +24,7 @@ clean:
 	rm -f memtrace_plugin.so memtrace_plugin.o
 
 check: memtrace_plugin.so test/test.c
-	$(CC) -fplugin=./memtrace_plugin.so test/test.c -c -o test.o
+	$(CC) -fplugin=./memtrace_plugin.so -O3 test/test.c -c -o test.o
 	$(CC) test.o memtrace.c -o program
  
 .PHONY: all clean check
