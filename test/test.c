@@ -10,6 +10,15 @@ int *heap;
 char src[4096];
 char dst[4096];
 
+
+void foo (unsigned char stack, int n){
+	printf("global: %d\n", global);
+	printf("heap: %d\n", *heap);
+	printf("stack: %d\n", stack);
+	printf("n: %d\n", n);
+	return;
+}
+
 int main(int argc, char **argv) {
 	unsigned char stack;
 
@@ -31,8 +40,7 @@ int main(int argc, char **argv) {
 	if(unlikely(stack == 0))
 		stack = 1;
 
-	printf("global: %d\n", global);
-	printf("heap: %d\n", *heap);
-	printf("stack: %d\n", stack);
+	foo(stack, 2);
+
 }
 

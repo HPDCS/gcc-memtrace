@@ -97,7 +97,7 @@ static unsigned int memtrace_instrument_execute(void)
 				continue;
 
 			/* Insert dirty_mem() call after alloca() */
-			memtrace_add_track_stack(&gsi, false);
+			//memtrace_add_track_stack(&gsi, false);
 		}
 	}
 
@@ -142,29 +142,70 @@ static unsigned int memtrace_cleanup_execute(void)
 	 *  (symbol_ref ("memtrace_track_stack") [flags 0x41] <function_decl	
 	 *  0x7f7cd3302a80 memtrace_track_stack>) (expr_list (0) (nil))) (nil))	
 	 */	
+
+	/*
+	 *Since we have to pass parameters to the function, we have to add something like that
+	 *----------------------------
+	 *(insn 82 81 84 3 (set (reg:SI 4 si)
+	 *	(const_int 2 [0x2])) "test/test.c":43 86 {*movsi_internal}
+	 *	(nil))
+	 *----------------------------
+	 *(call_insn 84 82 89 3 (call (mem:QI (symbol_ref:DI ("foo") [flags 0x3] <function_decl 0x7f7a241e4700 foo>) [0 foo S1 A8])
+	 *	(const_int 0 [0])) "test/test.c":43 689 {*call}
+	 *	(expr_list:REG_DEAD (reg:SI 5 di)
+	 *	(expr_list:REG_DEAD (reg:SI 4 si)
+	 *		(expr_list:REG_EH_REGION (const_int 0 [0])
+	 *			(nil))))
+	 *(expr_list:SI (use (reg:SI 5 di))
+	 *	(expr_list:SI (use (reg:SI 4 si))
+	 *		(nil))))
+	 *----------------------------
+	 *
+	 * There is the function insert_insn_on_edge (insn, e);
+  	 *						 commit_edge_insertions ();
+	 * to do so, but we have to create an RTL instruction.
+	 */
+
 	for (insn = get_insns(); insn; insn = next) {	
 		rtx body;	
 
 
 		printf("----------------------------\n");
+		//print_rtl_single(stdout, insn);
+		body = PATTERN(insn);
+		print_rtl_single(stdout, body);
+		if(NOTE_P(insn) || BARRIER_P(insn)) goto end;
+		if(GET_CODE(body) == SET){
+			rtx first = XEXP(body, 0);
+			//print_rtl_single(stdout, first);
+			if (GET_CODE(first) == MEM){
+				printf("MEMORY ACCESS FOUND!\n");
+				goto end;
+			}
+			rtx second = XEXP(body, 1);
+			if (GET_CODE(second) == MEM){
+				printf("MEMORY ACCESS FOUND!\n");
+				goto end;
+			}
+		}
 
- 		next = NEXT_INSN(insn);	
+ 		end: next = NEXT_INSN(insn);	
 
  		/* Check the expression code of the insn */	
-		if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
+		/*if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
 			continue;
 
-
+		*/
  		/*	
 		 * Check the expression code of the insn body, which is an RTL	
 		 * Expression (RTX) describing the side effect performed by	
 		 * that insn.	
 		 */	
-		body = PATTERN(insn);
+		//body = PATTERN(insn);
 
-		printf("%d:   ", GET_CODE(body));	
+		//printf("%d:   ", GET_CODE(body));	
 
-		print_rtl_single(stdout, next);
+		//print_rtl_single(stdout, next);
 		continue;
 		
 
