@@ -175,7 +175,7 @@ static unsigned int memtrace_cleanup_execute(void)
 		body = PATTERN(insn);
 		print_rtl_single(stdout, body);
 		if(NOTE_P(insn) || BARRIER_P(insn)) goto end;
-		if(GET_CODE(body) == SET){
+		/*if(GET_CODE(body) == SET){
 			rtx first = XEXP(body, 0);
 			//print_rtl_single(stdout, first);
 			if (GET_CODE(first) == MEM){
@@ -187,7 +187,7 @@ static unsigned int memtrace_cleanup_execute(void)
 				printf("MEMORY ACCESS FOUND!\n");
 				goto end;
 			}
-		}
+		}*/
 
  		end: next = NEXT_INSN(insn);	
 
@@ -236,6 +236,14 @@ static unsigned int memtrace_cleanup_execute(void)
 		}	
 #endif	
 	}	
+
+	printf("||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n");
+	rtx mycall = rtx_alloc(SET);
+	print_rtl_single(stdout, mycall);
+	rtx reg = rtx_alloc_extra(REG);
+	XEXP(mycall, 0) = reg;
+	
+	print_rtl_single(stdout, mycall);
 
  	return 0;	
 }
