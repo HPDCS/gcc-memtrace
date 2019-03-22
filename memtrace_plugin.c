@@ -68,6 +68,8 @@ static unsigned int memtrace_instrument_execute(void)
 	basic_block bb, entry_bb;
 	gimple_stmt_iterator gsi;
 
+	return 0;
+
 	printf("Chiamato GIMPLE\n");
 	fflush(stdout);
 
@@ -113,35 +115,9 @@ static bool large_stack_frame(void)
 #endif
 }
 
-/*	
- * Work with the RTL representation of the code.	
- * Remove the unneeded memtrace_track_stack() calls from the functions	
- * which don't call alloca() and don't have a large enough stack frame size.	
- */	
-static unsigned int memtrace_cleanup_execute(void)	
-{	
-	rtx_insn *insn, *next;
-	int code;
 
-	printf("CALL RTL\n");
-
- //	if (cfun->calls_alloca)	
-//		return 0;	
-
- //	if (large_stack_frame())	
-//		return 0;	
-
- 	/*	
-	 * Find memtrace_track_stack() calls. Loop through the chain of insns,	
-	 * which is an RTL representation of the code for a function.	
-	 *	
-	 * The example of a matching insn:	
-	 *  (call_insn 8 4 10 2 (call (mem (symbol_ref ("memtrace_track_stack")	
-	 *  [flags 0x41] <function_decl 0x7f7cd3302a80 memtrace_track_stack>)	
-	 *  [0 memtrace_track_stack S1 A8]) (0)) 675 {*call} (expr_list	
-	 *  (symbol_ref ("memtrace_track_stack") [flags 0x41] <function_decl	
-	 *  0x7f7cd3302a80 memtrace_track_stack>) (expr_list (0) (nil))) (nil))	
-	 */	
+static void put_instruction(rtx insn, rtx operand)
+{
 
 	/*
 	 *Since we have to pass parameters to the function, we have to add something like that
@@ -166,86 +142,71 @@ static unsigned int memtrace_cleanup_execute(void)
 	 * to do so, but we have to create an RTL instruction.
 	 */
 
-	for (insn = get_insns(); insn; insn = next) {	
-		rtx body;	
+//	rtx my_insn = rtx_alloc(SET);
+	printf("sizeof: %d\n", sizeof(rtx));
+	fflush(stdout);
+	rtx my_insn = new rtx;
+	memcpy(my_insn, insn, sizeof(*rtx));
+//	rtx reg1 = rtx_alloc(REG);
+//	rtx reg2 = rtx_alloc(REG);
+//	XEXP(my_insn, 0) = reg1;
+//	XEXP(my_insn, 1) = operand;
 
+//	PUT_MODE(reg1, DImode);
+//	PUT_MODE(reg2, DImode);
+
+	printf("-------->");
+	print_rtl_single(stdout, my_insn);
+
+	emit_insn_before(my_insn, insn);
+}
+
+/*
+ * Work with the RTL representation of the code.
+ * Remove the unneeded memtrace_track_stack() calls from the functions
+ * which don't call alloca() and don't have a large enough stack frame size.
+ */
+static unsigned int memtrace_cleanup_execute(void)
+{
+	rtx_insn *insn, *next;
+	int code;
+
+	for (insn = get_insns(); insn; insn = next) {
+		rtx body;
+
+		body = PATTERN(insn);
+		if(!(NOTE_P(insn) || BARRIER_P(insn)))
+			print_rtl_single(stdout, body);
+
+ 		next = NEXT_INSN(insn);
+
+ 		/* Check the expression code of the insn */
+		if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
+			continue;
 
 		printf("----------------------------\n");
-		//print_rtl_single(stdout, insn);
-		body = PATTERN(insn);
-		print_rtl_single(stdout, body);
-		if(NOTE_P(insn) || BARRIER_P(insn)) goto end;
-		/*if(GET_CODE(body) == SET){
+
+		if(GET_CODE(body) == SET){
 			rtx first = XEXP(body, 0);
 			//print_rtl_single(stdout, first);
 			if (GET_CODE(first) == MEM){
-				printf("MEMORY ACCESS FOUND!\n");
-				goto end;
+				printf("src: MEMORY ACCESS FOUND!\n");
+
+				put_instruction(insn, first);
+
 			}
 			rtx second = XEXP(body, 1);
 			if (GET_CODE(second) == MEM){
-				printf("MEMORY ACCESS FOUND!\n");
-				goto end;
+				printf("dst: MEMORY ACCESS FOUND!\n");
+
+				put_instruction(insn, second);
+
 			}
-		}*/
+		}
 
- 		end: next = NEXT_INSN(insn);	
+	}
 
- 		/* Check the expression code of the insn */	
-		/*if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
-			continue;
-
-		*/
- 		/*	
-		 * Check the expression code of the insn body, which is an RTL	
-		 * Expression (RTX) describing the side effect performed by	
-		 * that insn.	
-		 */	
-		//body = PATTERN(insn);
-
-		//printf("%d:   ", GET_CODE(body));	
-
-		//print_rtl_single(stdout, next);
-		continue;
-		
-
- 		/*	
-		 * Check the first operand of the call expression. It should	
-		 * be a mem RTX describing the needed subroutine with a	
-		 * symbol_ref RTX.	
-		 */	
-		body = XEXP(body, 0);	
-		if (GET_CODE(body) != MEM)	
-			continue;	
-
- 		body = XEXP(body, 0);	
-		if (GET_CODE(body) != SYMBOL_REF)	
-			continue;	
-
- 		if (SYMBOL_REF_DECL(body) != track_function_decl)	
-			continue;	
-
- 		/* Delete the memtrace_track_stack() call */	
-		delete_insn_and_edges(insn);	
-#if BUILDING_GCC_VERSION >= 4007 && BUILDING_GCC_VERSION < 8000	
-		if (GET_CODE(next) == NOTE &&	
-		    NOTE_KIND(next) == NOTE_INSN_CALL_ARG_LOCATION) {	
-			insn = next;	
-			next = NEXT_INSN(insn);	
-			delete_insn_and_edges(insn);	
-		}	
-#endif	
-	}	
-
-	printf("||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n");
-	rtx mycall = rtx_alloc(SET);
-	print_rtl_single(stdout, mycall);
-	rtx reg = rtx_alloc_extra(REG);
-	XEXP(mycall, 0) = reg;
-	
-	print_rtl_single(stdout, mycall);
-
- 	return 0;	
+ 	return 0;
 }
 
 static bool memtrace_gate(void)
@@ -309,14 +270,14 @@ static bool memtrace_instrument_gate(void)
 #include "gcc-generate-gimple-pass.h"
 
 
-static bool memtrace_cleanup_gate(void)	
-{	
-	return memtrace_gate();	
-}	
+static bool memtrace_cleanup_gate(void)
+{
+	return memtrace_gate();
+}
 
-#define PASS_NAME memtrace_cleanup	
-#define TODO_FLAGS_FINISH TODO_dump_func	
-#include "gcc-generate-rtl-pass.h"	
+#define PASS_NAME memtrace_cleanup
+#define TODO_FLAGS_FINISH TODO_dump_func
+#include "gcc-generate-rtl-pass.h"
 
 
 /*
@@ -354,12 +315,12 @@ __visible int plugin_init(struct plugin_name_args *plugin_info,
 	PASS_INFO(memtrace_instrument, "optimized", 1,
 						PASS_POS_INSERT_BEFORE);
 
-	/*	
-	 * The stackleak_cleanup pass should be executed before the "*free_cfg"	
-	 * pass. It's the moment when the stack frame size is already final,	
-	 * function prologues and epilogues are generated, and the	
-	 * machine-dependent code transformations are not done.	
-	 */	
+	/*
+	 * The stackleak_cleanup pass should be executed before the "*free_cfg"
+	 * pass. It's the moment when the stack frame size is already final,
+	 * function prologues and epilogues are generated, and the
+	 * machine-dependent code transformations are not done.
+	 */
 	PASS_INFO(memtrace_cleanup, "*free_cfg", 1, PASS_POS_INSERT_BEFORE);
 
 	if (!plugin_default_version_check(version, &gcc_version)) {
@@ -415,7 +376,7 @@ __visible int plugin_init(struct plugin_name_args *plugin_info,
 	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
 					&memtrace_instrument_pass_info);
 
-	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL,	
+	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
 					&memtrace_cleanup_pass_info);
 
 	return 0;

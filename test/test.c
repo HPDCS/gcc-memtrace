@@ -10,7 +10,6 @@ int *heap;
 char src[4096];
 char dst[4096];
 
-
 void foo (unsigned char stack, int n){
 	printf("global: %d\n", global);
 	printf("heap: %d\n", *heap);
