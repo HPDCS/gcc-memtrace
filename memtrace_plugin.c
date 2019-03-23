@@ -142,18 +142,24 @@ static void put_instruction(rtx insn, rtx operand)
 	 * to do so, but we have to create an RTL instruction.
 	 */
 
-//	rtx my_insn = rtx_alloc(SET);
-	printf("sizeof: %d\n", sizeof(rtx));
-	fflush(stdout);
-	rtx my_insn = new rtx;
-	memcpy(my_insn, insn, sizeof(*rtx));
+	rtx my_insn = rtx_alloc(SET);
+//	printf("sizeof: %d\n", sizeof(rtx));
+//	fflush(stdout);
+//	rtx my_insn = new rtx;
+//	memcpy(my_insn, insn, sizeof(*rtx));
 //	rtx reg1 = rtx_alloc(REG);
 //	rtx reg2 = rtx_alloc(REG);
 //	XEXP(my_insn, 0) = reg1;
-//	XEXP(my_insn, 1) = operand;
+
+//	If it is not a register, it will crash the compiler
+//	I have to check how to set other operands
+	if(!REG_P(XEXP(operand, 0))) return;	
+	XEXP(my_insn, 1) = XEXP(operand, 0);
 
 //	PUT_MODE(reg1, DImode);
 //	PUT_MODE(reg2, DImode);
+	rtx reg1 = gen_rtx_REG(DImode, 1);
+	XEXP(my_insn, 0) = reg1;
 
 	printf("-------->");
 	print_rtl_single(stdout, my_insn);
@@ -161,11 +167,7 @@ static void put_instruction(rtx insn, rtx operand)
 	emit_insn_before(my_insn, insn);
 }
 
-/*
- * Work with the RTL representation of the code.
- * Remove the unneeded memtrace_track_stack() calls from the functions
- * which don't call alloca() and don't have a large enough stack frame size.
- */
+
 static unsigned int memtrace_cleanup_execute(void)
 {
 	rtx_insn *insn, *next;
