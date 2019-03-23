@@ -151,14 +151,16 @@ static void put_instruction(rtx insn, rtx operand)
 //	rtx reg2 = rtx_alloc(REG);
 //	XEXP(my_insn, 0) = reg1;
 
-//	If it is not a register, it will crash the compiler
-//	I have to check how to set other operands
-	if(!REG_P(XEXP(operand, 0))) return;	
+/*	If the first operand of the body is a PRE_DEC it would not work,
+	it actually crashes the compiler (I belive because it is not possible to have
+	a set with a PRE_DEC but only a MEM with inside a PRE_DEC)
+*/
+	if(GET_CODE(XEXP(operand, 0)) == PRE_DEC) return;	
 	XEXP(my_insn, 1) = XEXP(operand, 0);
 
 //	PUT_MODE(reg1, DImode);
 //	PUT_MODE(reg2, DImode);
-	rtx reg1 = gen_rtx_REG(DImode, 1);
+	rtx reg1 = gen_rtx_REG(DImode, 4);
 	XEXP(my_insn, 0) = reg1;
 
 	printf("-------->");
