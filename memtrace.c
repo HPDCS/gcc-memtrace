@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stddef.h>
 
-int foo;
+int varvar;
 
 //-mgeneral-regs-only
 __attribute__((no_caller_saved_registers,used))
 static void ___write_mem(unsigned char *addr, size_t size) {
-	foo = 1;
+	varvar = 1;
 	//printf("Scrittura di %d byte su %p\n", size, addr);
 	//puts("Scrittura\n");
 	//fflush(stdout);
@@ -28,7 +28,7 @@ void __write_mem(void) {
 
 __attribute__((no_caller_saved_registers,used))
 void ___read_mem(unsigned char *addr, size_t size) {
-	foo = 2;
+	varvar = 2;
 //	printf("Lettura di %d byte da %p\n", size, addr);
 	//~ puts("Lettura\n");
 	//~ fflush(stdout);
