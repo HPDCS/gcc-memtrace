@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stddef.h>
 
-int foo;
+int asdfghjkl;
 
 //-mgeneral-regs-only
 __attribute__((no_caller_saved_registers,used))
 static void ___write_mem(unsigned char *addr, size_t size) {
-	foo = 1;
+	asdfghjkl = 1;
+	printf("Write at address %p of size %d\n", addr, size);
 	//printf("Scrittura di %d byte su %p\n", size, addr);
 	//puts("Scrittura\n");
 	//fflush(stdout);
@@ -14,7 +15,7 @@ static void ___write_mem(unsigned char *addr, size_t size) {
 
 __attribute__((naked))
 void __write_mem(void) {
-	asm volatile(
+	/*asm volatile(
 		"push %rdi\n"
 		"push %rsi\n"
 		"movq 4*8(%rsp), %rsi\n"
@@ -23,12 +24,16 @@ void __write_mem(void) {
 		"pop %rsi\n"
 		"pop %rdi\n"
 		"ret $16\n"
+	);*/
+	asm volatile(
+		"jmp ___write_mem"
 	);
 }
 
 __attribute__((no_caller_saved_registers,used))
 void ___read_mem(unsigned char *addr, size_t size) {
-	foo = 2;
+	asdfghjkl = 2;
+	printf("Read at address %p of size %d\n", addr, size);
 //	printf("Lettura di %d byte da %p\n", size, addr);
 	//~ puts("Lettura\n");
 	//~ fflush(stdout);
@@ -36,7 +41,7 @@ void ___read_mem(unsigned char *addr, size_t size) {
 
 __attribute__((naked))
 void __read_mem(void) {
-	asm volatile(
+	/*asm volatile(
 		"push %rdi\n"
 		"push %rsi\n"
 		"movq 4*8(%rsp), %rsi\n"
@@ -45,5 +50,8 @@ void __read_mem(void) {
 		"pop %rsi\n"
 		"pop %rdi\n"
 		"ret $16\n"
+	);*/
+	asm volatile(
+		"jmp ___read_mem"
 	);
 }

@@ -124,7 +124,7 @@ static bool large_stack_frame(void)
 
 static void put_instruction(rtx insn, rtx operand, bool write)
 {
-	rtx parm1, parm2, call;
+	rtx parm1, parm2, call, push1, push2, pop1, pop2;
 	const char *fn = write ? "__write_mem" : "__read_mem";
 
 	if(GET_CODE(XEXP(operand, 0)) == PRE_DEC || GET_CODE(XEXP(operand, 0)) == POST_INC)
@@ -134,33 +134,62 @@ static void put_instruction(rtx insn, rtx operand, bool write)
 	print_rtl_single(stdout, operand);
 	printf("++++++++\n");
 
-	parm1 = rtx_alloc(SET);
-	//XEXP(parm1, 0) = gen_rtx_REG(DImode, 5);
-	XEXP(parm1, 0) = gen_rtx_MEM(DImode,
+	push1 = rtx_alloc(SET);
+	XEXP(push1, 0) = gen_rtx_MEM(DImode,
 				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
 			);
+	//XEXP(parm1, 1) = XEXP(operand, 0);
+	XEXP(push1, 1) = gen_rtx_REG(DImode, 5);
+
+	push2 = rtx_alloc(SET);
+	XEXP(push2, 0) = gen_rtx_MEM(DImode,
+				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
+			);
+	//XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
+	XEXP(push2, 1) = gen_rtx_REG(DImode, 4);
+
+	pop1 = rtx_alloc(SET);
+	XEXP(pop1, 0) = gen_rtx_REG(DImode, 5);
+	XEXP(pop1, 1) = gen_rtx_MEM(DImode,
+				gen_rtx_POST_INC(DImode, gen_rtx_REG(DImode, 7))
+			);
+	
+	pop2 = rtx_alloc(SET);
+	XEXP(pop2, 0) = gen_rtx_REG(DImode, 4);
+	XEXP(pop2, 1) = gen_rtx_MEM(DImode,
+				gen_rtx_POST_INC(DImode, gen_rtx_REG(DImode, 7))
+			);
+	
+	parm1 = rtx_alloc(SET);
+	XEXP(parm1, 0) = gen_rtx_REG(DImode, 5);
 	XEXP(parm1, 1) = XEXP(operand, 0);
 
 	parm2 = rtx_alloc(SET);
-	//XEXP(parm2, 0) = gen_rtx_REG(DImode, 4);
-	XEXP(parm2, 0) = gen_rtx_MEM(DImode,
-				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
-			);
+	XEXP(parm2, 0) = gen_rtx_REG(DImode, 4);
 	XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
+
 
 	call = gen_rtx_CALL(VOIDmode,
 				gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, fn)),
 				gen_rtx_CONST_INT(VOIDmode, 0)
 		);
 
+	emit_insn_before(push1, insn);
+	emit_insn_before(push2, insn);
 	emit_insn_before(parm1, insn);
 	emit_insn_before(parm2, insn);
 	emit_insn_before(call, insn);
+	emit_insn_before(pop2, insn);
+	emit_insn_before(pop1, insn);
 
 	printf("********\n");
+	print_rtl_single(stdout, push1);
+	print_rtl_single(stdout, push2);
 	print_rtl_single(stdout, parm1);
 	print_rtl_single(stdout, parm2);
 	print_rtl_single(stdout, call);
+	print_rtl_single(stdout, pop2);
+	print_rtl_single(stdout, pop1);
 	printf("********\n");
 
 	return;
