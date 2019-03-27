@@ -1,4 +1,5 @@
 #include "gcc-common.h"
+#include "calls.h"
 
 #include "print-rtl.h"
 
@@ -160,13 +161,28 @@ static void put_instruction(rtx insn, rtx operand)
 
 //	PUT_MODE(reg1, DImode);
 //	PUT_MODE(reg2, DImode);
-	rtx reg1 = gen_rtx_REG(DImode, 4);
+	rtx reg1 = gen_rtx_REG(DImode, 5);
 	XEXP(my_insn, 0) = reg1;
 
 	printf("-------->");
 	print_rtl_single(stdout, my_insn);
 
 	emit_insn_before(my_insn, insn);
+
+
+	/*rtx call_insn = rtx_alloc(INSN);
+	rtx call = gen_rtx_CALL(VOIDmode, gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, "dirty_mem")), gen_rtx_CONST_INT(VOIDmode, 0));
+	XEXP(call_insn, 0) = call;
+	printf("-------->");
+	print_rtl_single(stdout, call);
+	emit_insn_after(call, my_insn);*/
+
+	rtx funexp = gen_rtx_SYMBOL_REF(DImode, "dirty_mem");
+	rtx reg_used = gen_rtx_REG(DImode, 5);
+	rtx mycall = prepare_call_address(NULL, funexp, NULL, &reg_used, 0, 0);
+	//emit_call_1(mycall, NULL, NULL, NULL, NULL, 1000, NULL, NULL, 0, 0, reg_used, 0, NULL);
+	//printf("---------------->");
+	//print_rtl_single(stdout, mycall);
 }
 
 
@@ -194,7 +210,7 @@ static unsigned int memtrace_cleanup_execute(void)
 			rtx first = XEXP(body, 0);
 			//print_rtl_single(stdout, first);
 			if (GET_CODE(first) == MEM){
-				printf("src: MEMORY ACCESS FOUND!\n");
+				//printf("src: MEMORY ACCESS FOUND!\n");
 
 				put_instruction(insn, first);
 
