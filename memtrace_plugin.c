@@ -138,14 +138,12 @@ static void put_instruction(rtx insn, rtx operand, bool write)
 	XEXP(push1, 0) = gen_rtx_MEM(DImode,
 				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
 			);
-	//XEXP(parm1, 1) = XEXP(operand, 0);
 	XEXP(push1, 1) = gen_rtx_REG(DImode, 5);
 
 	push2 = rtx_alloc(SET);
 	XEXP(push2, 0) = gen_rtx_MEM(DImode,
 				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
 			);
-	//XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
 	XEXP(push2, 1) = gen_rtx_REG(DImode, 4);
 
 	pop1 = rtx_alloc(SET);
