@@ -11,6 +11,8 @@ CXXFLAGS += -I$(PLUGINDIR)/include
 
 LDFLAGS = -std=c++11
 
+TEST=test/test.c
+
 # top level goal: build our plugin as a shared library
 all: memtrace_plugin.so
 
@@ -24,7 +26,7 @@ clean:
 	rm -f memtrace_plugin.so memtrace_plugin.o
 
 check: memtrace_plugin.so test/test.c
-	$(CC) -fplugin=./memtrace_plugin.so -O0 -g test/test.c -c -o test.o 
-	$(CC) test.o memtrace.c -o program
- 
+	$(CC) -fplugin=./memtrace_plugin.so -O0 -g $(TEST) -c -o test.o
+	$(CC) -mgeneral-regs-only test.o memtrace.c -lm -o program
+
 .PHONY: all clean check

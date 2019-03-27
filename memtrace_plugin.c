@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #include "gcc-common.h"
 #include "calls.h"
 
@@ -6,7 +8,8 @@
 int plugin_is_GPL_compatible;
 
 static int track_frame_size = -1;
-static const char track_function[] = "dirty_mem";
+static const char track_function1[] = "__write_mem";
+static const char track_function2[] = "__read_mem";
 
 /*
  * Mark these global variables (roots) for gcc garbage collector since
@@ -22,6 +25,8 @@ static struct plugin_info memtrace_plugin_info = {
 
 static void memtrace_add_track_stack(gimple_stmt_iterator *gsi, bool after)
 {
+	return;
+
 	gimple stmt;
 	gcall *dirty_mem;
 	cgraph_node_ptr node;
@@ -117,72 +122,48 @@ static bool large_stack_frame(void)
 }
 
 
-static void put_instruction(rtx insn, rtx operand)
+static void put_instruction(rtx insn, rtx operand, bool write)
 {
+	rtx parm1, parm2, call;
+	const char *fn = write ? "__write_mem" : "__read_mem";
 
-	/*
-	 *Since we have to pass parameters to the function, we have to add something like that
-	 *----------------------------
-	 *(insn 82 81 84 3 (set (reg:SI 4 si)
-	 *	(const_int 2 [0x2])) "test/test.c":43 86 {*movsi_internal}
-	 *	(nil))
-	 *----------------------------
-	 *(call_insn 84 82 89 3 (call (mem:QI (symbol_ref:DI ("foo") [flags 0x3] <function_decl 0x7f7a241e4700 foo>) [0 foo S1 A8])
-	 *	(const_int 0 [0])) "test/test.c":43 689 {*call}
-	 *	(expr_list:REG_DEAD (reg:SI 5 di)
-	 *	(expr_list:REG_DEAD (reg:SI 4 si)
-	 *		(expr_list:REG_EH_REGION (const_int 0 [0])
-	 *			(nil))))
-	 *(expr_list:SI (use (reg:SI 5 di))
-	 *	(expr_list:SI (use (reg:SI 4 si))
-	 *		(nil))))
-	 *----------------------------
-	 *
-	 * There is the function insert_insn_on_edge (insn, e);
-  	 *						 commit_edge_insertions ();
-	 * to do so, but we have to create an RTL instruction.
-	 */
+	if(GET_CODE(XEXP(operand, 0)) == PRE_DEC || GET_CODE(XEXP(operand, 0)) == POST_INC)
+		return;
 
-	rtx my_insn = rtx_alloc(SET);
-//	printf("sizeof: %d\n", sizeof(rtx));
-//	fflush(stdout);
-//	rtx my_insn = new rtx;
-//	memcpy(my_insn, insn, sizeof(*rtx));
-//	rtx reg1 = rtx_alloc(REG);
-//	rtx reg2 = rtx_alloc(REG);
-//	XEXP(my_insn, 0) = reg1;
+	printf("++++++++\n");
+	print_rtl_single(stdout, operand);
+	printf("++++++++\n");
 
-/*	If the first operand of the body is a PRE_DEC it would not work,
-	it actually crashes the compiler (I belive because it is not possible to have
-	a set with a PRE_DEC but only a MEM with inside a PRE_DEC)
-*/
-	if(GET_CODE(XEXP(operand, 0)) == PRE_DEC) return;	
-	XEXP(my_insn, 1) = XEXP(operand, 0);
+	parm1 = rtx_alloc(SET);
+	//XEXP(parm1, 0) = gen_rtx_REG(DImode, 5);
+	XEXP(parm1, 0) = gen_rtx_MEM(DImode,
+				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
+			);
+	XEXP(parm1, 1) = XEXP(operand, 0);
 
-//	PUT_MODE(reg1, DImode);
-//	PUT_MODE(reg2, DImode);
-	rtx reg1 = gen_rtx_REG(DImode, 5);
-	XEXP(my_insn, 0) = reg1;
+	parm2 = rtx_alloc(SET);
+	//XEXP(parm2, 0) = gen_rtx_REG(DImode, 4);
+	XEXP(parm2, 0) = gen_rtx_MEM(DImode,
+				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
+			);
+	XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
 
-	printf("-------->");
-	print_rtl_single(stdout, my_insn);
+	call = gen_rtx_CALL(VOIDmode,
+				gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, fn)),
+				gen_rtx_CONST_INT(VOIDmode, 0)
+		);
 
-	emit_insn_before(my_insn, insn);
+	emit_insn_before(parm1, insn);
+	emit_insn_before(parm2, insn);
+	emit_insn_before(call, insn);
 
-
-	/*rtx call_insn = rtx_alloc(INSN);
-	rtx call = gen_rtx_CALL(VOIDmode, gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, "dirty_mem")), gen_rtx_CONST_INT(VOIDmode, 0));
-	XEXP(call_insn, 0) = call;
-	printf("-------->");
+	printf("********\n");
+	print_rtl_single(stdout, parm1);
+	print_rtl_single(stdout, parm2);
 	print_rtl_single(stdout, call);
-	emit_insn_after(call, my_insn);*/
+	printf("********\n");
 
-	rtx funexp = gen_rtx_SYMBOL_REF(DImode, "dirty_mem");
-	rtx reg_used = gen_rtx_REG(DImode, 5);
-	rtx mycall = prepare_call_address(NULL, funexp, NULL, &reg_used, 0, 0);
-	//emit_call_1(mycall, NULL, NULL, NULL, NULL, 1000, NULL, NULL, 0, 0, reg_used, 0, NULL);
-	//printf("---------------->");
-	//print_rtl_single(stdout, mycall);
+	return;
 }
 
 
@@ -192,6 +173,7 @@ static unsigned int memtrace_cleanup_execute(void)
 	int code;
 
 	for (insn = get_insns(); insn; insn = next) {
+		printf("----------------------------\n");
 		rtx body;
 
 		body = PATTERN(insn);
@@ -204,26 +186,25 @@ static unsigned int memtrace_cleanup_execute(void)
 		if (!INSN_P(insn) || BARRIER_P(insn) || NOTE_P(insn) || CALL_P(insn))
 			continue;
 
-		printf("----------------------------\n");
-
 		if(GET_CODE(body) == SET){
 			rtx first = XEXP(body, 0);
 			//print_rtl_single(stdout, first);
 			if (GET_CODE(first) == MEM){
-				//printf("src: MEMORY ACCESS FOUND!\n");
+				// dest operand
+				printf("dst: MEMORY ACCESS FOUND!\n");
 
-				put_instruction(insn, first);
+				put_instruction(insn, first, true);
 
 			}
 			rtx second = XEXP(body, 1);
 			if (GET_CODE(second) == MEM){
-				printf("dst: MEMORY ACCESS FOUND!\n");
+				// src operand
+				printf("src: MEMORY ACCESS FOUND!\n");
 
-				put_instruction(insn, second);
+				put_instruction(insn, second, false);
 
 			}
 		}
-
 	}
 
  	return 0;
@@ -263,7 +244,7 @@ static void memtrace_start_unit(void *gcc_data __unused,
 
 	/* void dirty_mem(void) */
 	fntype = build_function_type_list(void_type_node, NULL_TREE);
-	track_function_decl = build_fn_decl(track_function, fntype);
+	track_function_decl = build_fn_decl(track_function1, fntype);
 	DECL_ASSEMBLER_NAME(track_function_decl); /* for LTO */
 	TREE_PUBLIC(track_function_decl) = 1;
 	TREE_USED(track_function_decl) = 1;
@@ -332,8 +313,7 @@ __visible int plugin_init(struct plugin_name_args *plugin_info,
 	 * versions of the plugin this new pass was inserted before the
 	 * "tree_profile" pass, which is currently called "profile".
 	 */
-	PASS_INFO(memtrace_instrument, "optimized", 1,
-						PASS_POS_INSERT_BEFORE);
+	PASS_INFO(memtrace_instrument, "optimized", 1, PASS_POS_INSERT_BEFORE);
 
 	/*
 	 * The stackleak_cleanup pass should be executed before the "*free_cfg"
@@ -341,7 +321,8 @@ __visible int plugin_init(struct plugin_name_args *plugin_info,
 	 * function prologues and epilogues are generated, and the
 	 * machine-dependent code transformations are not done.
 	 */
-	PASS_INFO(memtrace_cleanup, "*free_cfg", 1, PASS_POS_INSERT_BEFORE);
+	PASS_INFO(memtrace_cleanup, "*free_cfg", 1, PASS_POS_INSERT_AFTER);
+	//PASS_INFO(memtrace_cleanup, "ira", 1, PASS_POS_INSERT_AFTER);
 
 	if (!plugin_default_version_check(version, &gcc_version)) {
 		error(G_("incompatible gcc/plugin versions"));
