@@ -122,8 +122,26 @@ static bool large_stack_frame(void)
 }
 
 
-static void put_instruction(rtx insn, rtx operand, bool write)
+static void put_instruction(rtx insn, rtx operand, bool write, bool size_in_rcx)
 {
+	/*
+	* REP STOS %rax,%es:(%rdi) comes from the RTL instruction:
+	*
+	(parallel [
+        (set (reg:DI 2 cx [105])
+            (const_int 0 [0]))
+        (set (reg/f:DI 5 di [101])
+            (plus:DI (ashift:DI (reg:DI 2 cx [105])
+                    (const_int 3 [0x3]))
+                (reg/f:DI 5 di [101])))
+        (set (mem/c:BLK (reg/f:DI 5 di [101]) [0 MEM[(void *)&src]+0 A128])
+            (const_int 0 [0]))
+        (use (reg:DI 0 ax [104]))
+        (use (reg:DI 2 cx [105]))
+    ])
+	*/
+
+
 	rtx parm1, parm2, call, push1, push2, pop1, pop2;
 	const char *fn = write ? "__write_mem" : "__read_mem";
 
@@ -164,7 +182,8 @@ static void put_instruction(rtx insn, rtx operand, bool write)
 
 	parm2 = rtx_alloc(SET);
 	XEXP(parm2, 0) = gen_rtx_REG(DImode, 4);
-	XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
+	if(!size_in_rcx) XEXP(parm2, 1) = gen_rtx_CONST_INT(SImode, GET_MODE_SIZE(GET_MODE(operand)).to_constant());
+	else XEXP(parm2, 1) = gen_rtx_MULT(DImode, gen_rtx_REG(DImode, 2), gen_rtx_CONST_INT(DImode, 8));
 
 
 	call = gen_rtx_CALL(VOIDmode,
@@ -220,7 +239,7 @@ static unsigned int memtrace_cleanup_execute(void)
 				// dest operand
 				printf("dst: MEMORY ACCESS FOUND!\n");
 
-				put_instruction(insn, first, true);
+				put_instruction(insn, first, true, false);
 
 			}
 			rtx second = XEXP(body, 1);
@@ -228,8 +247,31 @@ static unsigned int memtrace_cleanup_execute(void)
 				// src operand
 				printf("src: MEMORY ACCESS FOUND!\n");
 
-				put_instruction(insn, second, false);
+				put_instruction(insn, second, false, false);
 
+			}
+		}
+		else if (GET_CODE(body) == PARALLEL){
+			int i;
+			for (i = 0; i < XVECLEN(body, 0); i++){
+				rtx expression = XVECEXP(body, 0, i);
+				if (GET_CODE(expression) == SET){
+					rtx first, second;
+					first = XEXP(expression, 0);
+					second = XEXP(expression, 1);
+					if (GET_CODE(first) == MEM || GET_CODE(second) == MEM){
+						if (GET_CODE(first) == MEM){
+							printf("dst: MEMORY ACCESS FOUND:\n");
+							print_rtl_single(stdout, XEXP(first, 0));
+							put_instruction(insn, first, true, true);
+						} 
+						if (GET_CODE(second) == MEM){
+							printf("src: MEMORY ACCESS FOUND:\n");
+							print_rtl_single(stdout, XEXP(second, 0));
+							put_instruction(insn, second, false, true);
+						} 
+					}
+				}
 			}
 		}
 	}
