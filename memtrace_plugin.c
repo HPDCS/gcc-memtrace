@@ -323,18 +323,16 @@ static unsigned int memtrace_cleanup_execute(void)
 					rtx first, second;
 					first = XEXP(expression, 0);
 					second = XEXP(expression, 1);
-					if (GET_CODE(first) == MEM || GET_CODE(second) == MEM){
-						if (GET_CODE(first) == MEM){
-							printf("dst: MEMORY ACCESS FOUND:\n");
-							print_rtl_single(stdout, XEXP(first, 0));
-							put_instruction(insn, first, true);
-						} 
-						if (GET_CODE(second) == MEM){
-							printf("src: MEMORY ACCESS FOUND:\n");
-							print_rtl_single(stdout, XEXP(second, 0));
-							put_instruction(insn, second, false);
-						} 
-					}
+					if (GET_CODE(first) == MEM){
+						printf("dst: MEMORY ACCESS FOUND:\n");
+						print_rtl_single(stdout, XEXP(first, 0));
+						put_instruction(insn, first, true);
+					} 
+					if (GET_CODE(second) == MEM){
+						printf("src: MEMORY ACCESS FOUND:\n");
+						print_rtl_single(stdout, XEXP(second, 0));
+						put_instruction(insn, second, false);
+					} 
 				}
 			}
 		}

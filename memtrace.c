@@ -3,7 +3,7 @@
 
 int varvar;
 
-//-mgeneral-regs-only
+//-mgeneral-regs-only parameter has to be added to the compilation command
 __attribute__((no_caller_saved_registers,used))
 void __write_mem(unsigned char *addr, size_t size) {
 	varvar = 1;
