@@ -121,34 +121,108 @@ static bool large_stack_frame(void)
 #endif
 }
 
-
-static void put_instruction(rtx insn, rtx operand, bool write)
+static void put_instruction_cmov(rtx insn, rtx condition, rtx then_expression, rtx else_expression, bool write_1, bool write_2)
 {
 
-	/* in case of cmov with then->MEM and else->MEM we have to add
+	rtx parm1_then, parm2_then, parm1_else, parm2_else, call_1, call_2, push1, push2, pop1, pop2, if_then_else, label_x, label_x1, label_x2, jmp_x2;
+	const char *fn1 = write_1 ? "__write_mem" : "__read_mem";
+	const char *fn2 = write_2 ? "__write_mem" : "__read_mem";
+	if(then_expression != NULL){
+		if(GET_CODE(XEXP(then_expression, 0)) == PRE_DEC || GET_CODE(XEXP(then_expression, 0)) == POST_INC)
+			return;
+	}
+	if (else_expression != NULL){
+		if(GET_CODE(XEXP(else_expression, 0)) == PRE_DEC || GET_CODE(XEXP(else_expression, 0)) == POST_INC)
+			return;
+	}
 
-	push rdi
-	push rsi
-	(if_then_else (condition)
-		mov (then), rdi
-		mov (else), rdi)
-	mov (size), rsi
-	call __write/read_mem
-	pop rsi
-	pop rdi
+	printf("++++++++\n");
+	if (then_expression != NULL)
+		print_rtl_single(stdout, then_expression);
+	if (else_expression != NULL)
+		print_rtl_single(stdout, else_expression);
+	printf("++++++++\n");
 
-	In case of cmov with then->MEM and else->REG we have to add
-	push rdi
-	push rsi
-	mov (then), rdi
-	mov (size), rsi
-	(if_then_else (condition)
-		call __write/read_mem
-		nop)
-	pop rsi
-	pop rdi
+	label_x = gen_label_rtx();
+	label_x1 = gen_label_rtx();
+	label_x2 = gen_label_rtx();
+
+	if_then_else = rtx_alloc(IF_THEN_ELSE);
+	XEXP(if_then_else, 0) = condition;
+	XEXP(if_then_else, 1) = gen_rtx_SET(pc_rtx, gen_rtx_LABEL_REF(VOIDmode, label_x));
+	XEXP(if_then_else, 2) = gen_rtx_SET(pc_rtx, gen_rtx_LABEL_REF(VOIDmode, label_x1));
+
+	if (then_expression != NULL)
+		jmp_x2 = gen_rtx_SET(pc_rtx, gen_rtx_LABEL_REF(VOIDmode, label_x2));
+	else
+		jmp_x2 = NULL;
+
+	push1 = rtx_alloc(SET);
+	XEXP(push1, 0) = gen_rtx_MEM(DImode,
+				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
+			);
+	XEXP(push1, 1) = gen_rtx_REG(DImode, 5);
+
+	push2 = rtx_alloc(SET);
+	XEXP(push2, 0) = gen_rtx_MEM(DImode,
+				gen_rtx_PRE_DEC(DImode,	gen_rtx_REG(DImode, 7))
+			);
+	XEXP(push2, 1) = gen_rtx_REG(DImode, 4);
+
+	pop1 = rtx_alloc(SET);
+	XEXP(pop1, 0) = gen_rtx_REG(DImode, 5);
+	XEXP(pop1, 1) = gen_rtx_MEM(DImode,
+				gen_rtx_POST_INC(DImode, gen_rtx_REG(DImode, 7))
+			);
+	
+	pop2 = rtx_alloc(SET);
+	XEXP(pop2, 0) = gen_rtx_REG(DImode, 4);
+	XEXP(pop2, 1) = gen_rtx_MEM(DImode,
+				gen_rtx_POST_INC(DImode, gen_rtx_REG(DImode, 7))
+			);
+	if (then_expression != NULL){
+		parm1_then = rtx_alloc(SET);
+		XEXP(parm1_then, 0) = gen_rtx_REG(DImode, 5);
+		XEXP(parm1_then, 1) = XEXP(then_expression, 0);
+
+		parm2_then = rtx_alloc(SET);
+		XEXP(parm2_then, 0) = gen_rtx_REG(DImode, 4);
+		XEXP(parm2_then, 1) = gen_rtx_CONST_INT(DImode, MEM_SIZE(then_expression).to_constant()); //before it was SImode, why?
+
+		call_1 = gen_rtx_CALL(VOIDmode,
+				gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, fn1)),
+				gen_rtx_CONST_INT(VOIDmode, 0)
+		);
+	}
+	else {
+		parm1_then = NULL;
+		parm2_then = NULL;
+	}
 
 
+	
+	
+	if (else_expression != NULL){
+		parm1_else = rtx_alloc(SET);
+		XEXP(parm1_else, 0) = gen_rtx_REG(DImode, 5);
+		XEXP(parm1_else, 1) = XEXP(else_expression, 0);
+
+		parm2_else = rtx_alloc(SET);
+		XEXP(parm2_else, 0) = gen_rtx_REG(DImode, 4);
+		XEXP(parm2_else, 1) = gen_rtx_CONST_INT(DImode, MEM_SIZE(else_expression).to_constant()); //before it was SImode, why?
+
+		call_2 = gen_rtx_CALL(VOIDmode,
+				gen_rtx_MEM(QImode, gen_rtx_SYMBOL_REF(DImode, fn2)),
+				gen_rtx_CONST_INT(VOIDmode, 0)
+		);
+	}
+	else {
+		parm1_else = NULL;
+		parm2_else = NULL;
+	}
+
+
+	/*
 	Or it is possible to write an assembly-like code like that
 
 	push rdi
@@ -156,25 +230,94 @@ static void put_instruction(rtx insn, rtx operand, bool write)
 	(if_then_else (cond)
 		jmp L_(x)
 		jmp L_(x+1))
+	
+	/*that code only if (then) is a MEM
+
 	code_label(L_(x))
 	mov rdi, (then)
 	mov rsi, sizeof(then)
 	call __write/read_mem
-
-	/*here only if else is a MEM
-
 	jmp L_(x+2)
+	
+	/*up to here
+
+	/*that code only if (else) is a MEM
+
 	code_label(L_(x+1))
 	mov rdi, (else)
 	mov rsi, sizeof(else)
 	call __write/read_mem
-	code_label(L_(x+2))
 
 	/* up to here
-	((((code_label(L_(x+1)))))) only in case it is not a MEM
+	code_label(L_(x+2))
+	((((code_label(L_(x+1)))))) only in case (else) it is not a MEM
+	((((code_label(L_(x)))))) only in case (then) it is not a MEM
 	pop rsi
 	pop rdi
 	*/
+
+
+	emit_insn_before(push1, insn);
+	emit_insn_before(push2, insn);
+	emit_insn_before(if_then_else, insn);
+
+	if (then_expression != NULL){
+		emit_insn_before(label_x, insn);
+		emit_insn_before(parm1_then, insn);
+		emit_insn_before(parm2_then, insn);
+		emit_insn_before(call_1, insn);
+		emit_insn_before(jmp_x2, insn);
+	}
+	if (else_expression != NULL){
+		emit_insn_before(label_x1, insn);
+		emit_insn_before(parm1_else, insn);
+		emit_insn_before(parm2_else, insn);
+		emit_insn_before(call_2, insn);
+	}
+
+	emit_insn_before(label_x2, insn);
+
+	if (then_expression == NULL){
+		emit_insn_before(label_x, insn);
+	}
+	if (else_expression == NULL){
+		emit_insn_before(label_x1, insn);
+	}
+	emit_insn_before(pop2, insn);
+	emit_insn_before(pop1, insn);
+
+	printf("********\n");
+	print_rtl_single(stdout, push1);
+	print_rtl_single(stdout, push2);
+	print_rtl_single(stdout, if_then_else);
+	if (then_expression != NULL){
+		print_rtl_single(stdout, label_x);
+		print_rtl_single(stdout, parm1_then);
+		print_rtl_single(stdout, parm2_then);
+		print_rtl_single(stdout, call_1);
+		print_rtl_single(stdout, jmp_x2);
+	}
+	if (else_expression != NULL){
+		print_rtl_single(stdout, label_x1);
+		print_rtl_single(stdout, parm1_else);
+		print_rtl_single(stdout, parm2_else);
+		print_rtl_single(stdout, call_2);
+	}
+	print_rtl_single(stdout, label_x2);
+	if (then_expression == NULL)
+		print_rtl_single(stdout, label_x);
+	if (else_expression == NULL)
+		print_rtl_single(stdout, label_x1);
+	print_rtl_single(stdout, pop2);
+	print_rtl_single(stdout, pop1);
+	printf("********\n");
+
+	return;
+
+}
+
+static void put_instruction(rtx insn, rtx operand, bool write)
+{
 
 	rtx parm1, parm2, call, push1, push2, pop1, pop2;
 	const char *fn = write ? "__write_mem" : "__read_mem";
@@ -284,27 +427,40 @@ static unsigned int memtrace_cleanup_execute(void)
 			}
 			else if (GET_CODE(first) == IF_THEN_ELSE){
 				rtx then_expression = XEXP(first, 1);
-				if (GET_CODE(then_expression) == MEM){
-					printf("dst: MEMORY ACCESS FOUND!\n");
-					// insert instructions
-				}
 				rtx else_expression = XEXP(first, 2);
-				if (GET_CODE(else_expression) == MEM){
+				if (GET_CODE(then_expression) == MEM && GET_CODE(else_expression) == MEM){
 					printf("dst: MEMORY ACCESS FOUND!\n");
 					// insert instructions
+					put_instruction_cmov(insn, XEXP(first, 0), then_expression, else_expression, true, true);
+				}
+				else if (GET_CODE(then_expression) == MEM){
+					printf("dst: MEMORY ACCESS FOUND!\n");
+					// insert instructions
+					put_instruction_cmov(insn, XEXP(first, 0), then_expression, NULL, true, false);
+				}
+				else if (GET_CODE(else_expression) == MEM){
+					printf("dst: MEMORY ACCESS FOUND!\n");
+					// insert instructions
+					put_instruction_cmov(insn, XEXP(first, 0), NULL, else_expression, false, true);
 				}
 			}
 			rtx second = XEXP(body, 1);
 			if (GET_CODE(second) == IF_THEN_ELSE){
 				rtx then_expression = XEXP(second, 1);
-				if (GET_CODE(then_expression) == MEM){
-					printf("src: MEMORY ACCESS FOUND!\n");
-					// insert instructions
-				}
 				rtx else_expression = XEXP(second, 2);
-				if (GET_CODE(else_expression) == MEM){
+				if (GET_CODE(then_expression) == MEM && GET_CODE(else_expression)){
 					printf("src: MEMORY ACCESS FOUND!\n");
 					// insert instructions
+					put_instruction_cmov(insn, XEXP(first, 0), then_expression, else_expression, false, false);
+				}
+				else if (GET_CODE(then_expression) == MEM){
+					printf("src: MEMORY ACCESS FOUND!\n");
+					// insert instructions
+					put_instruction_cmov(insn, XEXP(first, 0), then_expression, NULL, false, false);
+				}
+				else if (GET_CODE(else_expression) == MEM){
+					printf("src: MEMORY ACCESS FOUND!\n");
+					put_instruction_cmov(insn, XEXP(first, 0), NULL, else_expression, false, false);
 				}
 			}
 			else if (GET_CODE(second) == MEM){
